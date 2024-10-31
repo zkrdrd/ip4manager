@@ -3,20 +3,18 @@ package network
 import (
 	"errors"
 	"fmt"
+	"ipaddresspackage/db"
 	"math/big"
 	"net"
 	"strconv"
+
+	"github.com/apparentlymart/go-cidr/cidr"
 )
 
 /*
 Конфигурирование модуля:  адрес сети и маска.
 Система сама определяем сколько в ней есть адресов и их диапазон с учетом адреса сети, первый адрес - адрес шлюза, и широковещательный адрес, последний адрес сети.
 */
-
-type network struct {
-	IP   net.IP     // network number
-	Mask net.IPMask // network mask
-}
 
 var (
 	ErrNetworkIsNotCorrect = errors.New("network is not correct")
@@ -47,48 +45,41 @@ func verifiedNetworkData(NetwrokAddresses string, NetwrokMask string) (net.IP, n
 		return address, netMask, nil
 	}
 	return nil, nil, nil
-
 }
 
-func NewNetwork(NetwrokAddresses string, NetwrokMask string) (network, error) {
+func NewNetwork(NetwrokAddresses string, NetwrokMask string) (net.IPNet, error) {
 
 	address, netMask, err := verifiedNetworkData(NetwrokAddresses, NetwrokMask)
 	if err != nil {
-		return network{
+		return net.IPNet{
 			IP:   nil,
 			Mask: nil,
 		}, err
 	}
 
-	return network{
+	return net.IPNet{
 		IP:   address,
 		Mask: netMask,
 	}, nil
 }
 
-func AddressCount(network network) uint64 {
-	prefixLen, bits := network.Mask.Size()
-	return 1 << (uint64(bits) - uint64(prefixLen))
-}
+func NewNetwrokMapping(net net.IPNet) {
+	db := db.NewDB()
 
-func AddressRange(network network) (net.IP, net.IP) {
-	firstIP := network.IP
+	first, second := cidr.AddressRange(&net)
 
-	prefixLen, bits := network.Mask.Size()
-	if prefixLen == bits {
-		lastIP := make([]byte, len(firstIP))
-		copy(lastIP, firstIP)
-		return firstIP, lastIP
+	startIP, mask := ipToInt(first)
+	finishIP, mask := ipToInt(second)
+
+	for i := new(big.Int).Set(startIP); i.Cmp(finishIP) < 0; i.Add(i, big.NewInt(1)) {
+		net.IP = intToIP(i, mask)
+		db.IPdb[&net] = true
 	}
 
-	firstIPInt, bits := ipToInt(firstIP)
-	hostLen := uint(bits) - uint(prefixLen)
-	lastIPInt := big.NewInt(1)
-	lastIPInt.Lsh(lastIPInt, hostLen)
-	lastIPInt.Sub(lastIPInt, big.NewInt(1))
-	lastIPInt.Or(lastIPInt, firstIPInt)
+	for key, val := range db.IPdb {
+		fmt.Println(key, val)
+	}
 
-	return firstIP, intToIP(lastIPInt, bits)
 }
 
 func ipToInt(ip net.IP) (*big.Int, int) {
@@ -106,7 +97,6 @@ func ipToInt(ip net.IP) (*big.Int, int) {
 func intToIP(ipInt *big.Int, bits int) net.IP {
 	ipBytes := ipInt.Bytes()
 	ret := make([]byte, bits/8)
-
 	for i := 1; i <= len(ipBytes); i++ {
 		ret[len(ret)-i] = ipBytes[len(ipBytes)-i]
 	}

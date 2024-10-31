@@ -2,7 +2,7 @@ package network_test
 
 import (
 	"fmt"
-	"ipaddresspackage/pkg/network"
+	"ipaddresspackage/network"
 	"testing"
 )
 
@@ -11,10 +11,10 @@ func TestAccounting(t *testing.T) {
 	if err != nil {
 		fmt.Print(err)
 	}
-	fmt.Println(net)
-	fmt.Println(network.AddressCount(net))
-	first, second := network.AddressRange(net)
-	fmt.Println(first, second)
+	//fmt.Println(net)
+	//fmt.Println(cidr.AddressCount(&net))
+
+	network.NewNetwrokMapping(net)
 }
 
 var ()
