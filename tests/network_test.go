@@ -7,11 +7,8 @@ import (
 )
 
 func TestAccounting(t *testing.T) {
-	net, err := network.NewNetwork(`192.168.0.0`, `255.255.0.0`)
-	if err != nil {
-		fmt.Print(err)
-	}
-	//fmt.Println(net)
+	net := network.NewNetwork(172, 16, 0, 0, 255, 255, 0, 0)
+	fmt.Println(net)
 	//fmt.Println(cidr.AddressCount(&net))
 
 	network.NewNetwrokMapping(net)
