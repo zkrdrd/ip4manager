@@ -1,14 +1,12 @@
 package network
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"ipaddresspackage/db"
-	"math/big"
+	"ipaddresspackage/storage"
 	"net"
-	"strconv"
-
-	"github.com/apparentlymart/go-cidr/cidr"
+	"reflect"
 )
 
 /*
@@ -17,88 +15,73 @@ import (
 */
 
 var (
-	ErrNetworkIsNotCorrect = errors.New("network is not correct")
-	ErrNetMaskIsNotCorrect = errors.New("net mask is not correct")
+	ErrNetworkIsNotCorrect            = errors.New("network is not correct")
+	ErrNetMaskIsNotCorrect            = errors.New("net mask is not correct")
+	ErrIPADressIsNotIncludedInNetwork = errors.New("ip address is not included in network")
 )
 
-func verifiedNetworkData(NetwrokAddresses string, NetwrokMask string) (net.IP, net.IPMask, error) {
-	address := net.ParseIP(NetwrokAddresses).To4()
-	if address == nil {
-		return nil, nil, ErrNetworkIsNotCorrect
-	}
+func NewNetwork(firestIPAddressOctet, secondIPAddressOctet, thierdIPAddressOctet, fourthIPAddressOctet byte,
+	firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet byte) net.IPNet {
 
-	if len(NetwrokMask) >= 1 && len(NetwrokMask) <= 2 {
-		mask, err := strconv.Atoi(NetwrokMask)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if mask <= 0 && mask >= 32 {
-			return nil, nil, ErrNetMaskIsNotCorrect
-		}
-	} else if len(NetwrokMask) >= 7 && len(NetwrokMask) <= 15 {
-		mask := net.ParseIP(NetwrokMask).To4()
-		if mask == nil {
-			return nil, nil, ErrNetMaskIsNotCorrect
-		}
-		netMask := net.IPMask(mask)
-		return address, netMask, nil
-	}
-	return nil, nil, nil
-}
-
-func NewNetwork(NetwrokAddresses string, NetwrokMask string) (net.IPNet, error) {
-
-	address, netMask, err := verifiedNetworkData(NetwrokAddresses, NetwrokMask)
-	if err != nil {
-		return net.IPNet{
-			IP:   nil,
-			Mask: nil,
-		}, err
-	}
+	ip := net.IPv4(firestIPAddressOctet, secondIPAddressOctet, thierdIPAddressOctet, fourthIPAddressOctet)
+	mask := net.IPv4Mask(firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet)
 
 	return net.IPNet{
-		IP:   address,
-		Mask: netMask,
-	}, nil
-}
-
-func NewNetwrokMapping(net net.IPNet) {
-	db := db.NewDB()
-
-	first, second := cidr.AddressRange(&net)
-
-	startIP, mask := ipToInt(first)
-	finishIP, mask := ipToInt(second)
-
-	for i := new(big.Int).Set(startIP); i.Cmp(finishIP) < 0; i.Add(i, big.NewInt(1)) {
-		net.IP = intToIP(i, mask)
-		db.IPdb[&net] = true
-	}
-
-	for key, val := range db.IPdb {
-		fmt.Println(key, val)
-	}
-
-}
-
-func ipToInt(ip net.IP) (*big.Int, int) {
-	val := &big.Int{}
-	val.SetBytes([]byte(ip))
-	if len(ip) == net.IPv4len {
-		return val, 32
-	} else if len(ip) == net.IPv6len {
-		return val, 128
-	} else {
-		panic(fmt.Errorf("Unsupported address length %d", len(ip)))
+		IP:   ip,
+		Mask: mask,
 	}
 }
 
-func intToIP(ipInt *big.Int, bits int) net.IP {
-	ipBytes := ipInt.Bytes()
-	ret := make([]byte, bits/8)
-	for i := 1; i <= len(ipBytes); i++ {
-		ret[len(ret)-i] = ipBytes[len(ipBytes)-i]
+func NewNetwrokMapping(netw net.IPNet) {
+	db := storage.NewDB()
+	// fmt.Println(netw.Contains(net.ParseIP(`172.16.255.255`)))
+	// // если карта пустая то идем от идем от 0 если там что то есть проверяем карту
+
+	// broadcust := make(net.IP, len(netw.IP.To4()))
+	// binary.BigEndian.PutUint32(broadcust, binary.BigEndian.Uint32(netw.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.Mask).To4()))
+
+	// fmt.Println(broadcust)
+	// fmt.Println(nextIP(broadcust, 1))
+	selectIPAddress(netw, db)
+	fmt.Println(db.IPdb)
+}
+
+func selectIPAddress(netw net.IPNet, db storage.DB) error {
+	netwIP := netw.IP
+
+	broadcust := make(net.IP, len(netw.IP.To4()))
+	binary.BigEndian.PutUint32(broadcust, binary.BigEndian.Uint32(netw.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.Mask).To4()))
+
+	if len(db.IPdb) == 0 {
+		db.IPdb[netwIP.String()] = netw
+		db.IPdb[broadcust.String()] = netw
 	}
-	return net.IP(ret)
+
+	for key := range db.IPdb {
+		nextIP := nextIP(netwIP, 1)
+		storageIP := net.ParseIP(key)
+		if !reflect.DeepEqual(nextIP, storageIP) {
+			// TODO:
+			// add locker
+			// return ip
+			if netw.Contains(nextIP) {
+				db.IPdb[nextIP.String()] = netw
+			} else {
+				return ErrIPADressIsNotIncludedInNetwork
+			}
+		}
+		continue
+	}
+	return nil
+}
+
+func nextIP(ip net.IP, inc uint) net.IP {
+	i := ip.To4()
+	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
+	v += inc
+	v3 := byte(v & 0xFF)
+	v2 := byte((v >> 8) & 0xFF)
+	v1 := byte((v >> 16) & 0xFF)
+	v0 := byte((v >> 24) & 0xFF)
+	return net.IPv4(v0, v1, v2, v3)
 }
