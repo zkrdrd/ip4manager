@@ -76,12 +76,11 @@ func selectIPAddress(netw net.IPNet, db storage.DB) error {
 }
 
 func nextIP(ip net.IP, inc uint) net.IP {
-	i := ip.To4()
-	v := uint(i[0])<<24 + uint(i[1])<<16 + uint(i[2])<<8 + uint(i[3])
-	v += inc
-	v3 := byte(v & 0xFF)
-	v2 := byte((v >> 8) & 0xFF)
-	v1 := byte((v >> 16) & 0xFF)
-	v0 := byte((v >> 24) & 0xFF)
-	return net.IPv4(v0, v1, v2, v3)
+	octets := uint(ip[0])<<24 + uint(ip[1])<<16 + uint(ip[2])<<8 + uint(ip[3])
+	octets += inc
+	octets4 := byte(octets & 0xFF)
+	octets3 := byte((octets >> 8) & 0xFF)
+	octets2 := byte((octets >> 16) & 0xFF)
+	octets1 := byte((octets >> 24) & 0xFF)
+	return net.IPv4(octets1, octets2, octets3, octets4)
 }
