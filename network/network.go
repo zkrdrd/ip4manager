@@ -12,7 +12,7 @@ import (
 Система сама определяем сколько в ней есть адресов и их диапазон с учетом адреса сети, первый адрес - адрес шлюза, и широковещательный адрес, последний адрес сети.
 */
 var (
-	ErrNetworkIsNotCorrect = errors.New("network and broadcast is equal")
+	ErrNoFreeIPAddress     = errors.New("no free ip address")
 	ErrNetMaskIsNotCorrect = errors.New("net mask is not correct")
 	octets                 = []byte{0, 128, 192, 224, 240, 248, 242, 254, 255}
 )
@@ -66,7 +66,7 @@ func checkIPAddress(ip net.IP, mask net.IPMask) error {
 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(ip.To4())|^binary.BigEndian.Uint32(net.IP(mask).To4()))
 
 	if bytes.Compare(ip.To4(), broadcast.To4()) == 0 {
-		return ErrNetworkIsNotCorrect
+		return ErrNoFreeIPAddress
 	}
 
 	return nil

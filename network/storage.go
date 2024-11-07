@@ -1,9 +1,8 @@
-package memory
+package network
 
 import (
 	"encoding/binary"
 	"errors"
-	"ipaddresspackage/locker"
 	"net"
 	"reflect"
 )
@@ -24,11 +23,10 @@ func NewDB() DB {
 	}
 }
 
-func (db DB) TakeIPAddress(netw net.IPNet) (string, error) {
+func (db DB) SetUsedIP(netw net.IPNet) (string, error) {
+
 	broadcast := make(net.IP, len(netw.IP.To4()))
 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.Mask).To4()))
-
-	locker := locker.NewLocker()
 
 	if len(db.IPdb) == 0 {
 		// network Example: 192.168.0.0
@@ -41,44 +39,32 @@ func (db DB) TakeIPAddress(netw net.IPNet) (string, error) {
 
 	for key := range db.IPdb {
 		nextIP := nextIP(netw.IP, 1)
-
-		locker.Lock(nextIP.String())
-
 		storageIP := net.ParseIP(key)
 		if !reflect.DeepEqual(nextIP, storageIP) {
 			if netw.Contains(nextIP) {
 				db.IPdb[nextIP.String()] = netw
-				locker.Unlock(nextIP.String())
 				return nextIP.String(), nil
 			} else {
-				locker.Unlock(nextIP.String())
 				return "", ErrIPADressIsNotIncludedInNetwork
 			}
 		}
-		locker.Unlock(nextIP.String())
 	}
 	return "", nil
 }
 
-func (db DB) FreeIPAddress(ip string) error {
+func (db DB) ReleaseIPAddress(ip string) error {
 
 	if len(db.IPdb) == 0 {
 		return ErrStorageIsEmpty
 	}
 
-	locker := locker.NewLocker()
-
 	for key := range db.IPdb {
-		locker.Lock(ip)
-
 		storageIP := net.ParseIP(key)
 
 		if !reflect.DeepEqual(ip, storageIP) {
 			delete(db.IPdb, ip)
-			locker.Unlock(ip)
 			return nil
 		}
-		locker.Unlock(ip)
 	}
 	return ErrIPAddressIsNotFound
 }
