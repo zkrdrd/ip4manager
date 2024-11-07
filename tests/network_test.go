@@ -2,7 +2,6 @@ package network_test
 
 import (
 	"ipaddresspackage/network"
-	"ipaddresspackage/storage/memory"
 	"log"
 	"testing"
 )
@@ -15,8 +14,8 @@ func TestAccounting(t *testing.T) {
 	// fmt.Println(net)
 	//fmt.Println(cidr.AddressCount(&net))
 
-	networkMapping := memory.NewDB()
-	networkMapping.TakeIPAddress(net)
+	networkMapping := network.NewDB()
+	networkMapping.SetUsedIP(net)
 
 }
 
