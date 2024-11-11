@@ -3,8 +3,10 @@ package network
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
+	"sort"
 )
 
 /*
@@ -47,33 +49,42 @@ func (netw NetworkControl) SetUsedIP() (string, error) {
 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
 
 	if len(netw.UsedIPStorage) == 0 {
+		// broadcast Example: 192.168.255.255
+		netw.UsedIPStorage[broadcast.String()] = netw.network
 		// network Example: 192.168.0.0
 		netw.UsedIPStorage[netw.network.IP.String()] = netw.network
 		// gateway Example: 192.168.0.1
 		netw.UsedIPStorage[nextIP(netw.network.IP, 1).String()] = netw.network
-		// broadcast Example: 192.168.255.255
-		netw.UsedIPStorage[broadcast.String()] = netw.network
 	}
 
-	if netw.FreeIPStorage == nil {
-		for key := range netw.UsedIPStorage {
-			nextIP := nextIP(netw.network.IP, 1)
-			storageIP := net.ParseIP(key)
-			if !reflect.DeepEqual(nextIP, storageIP) {
-				if netw.network.Contains(nextIP) {
-					netw.UsedIPStorage[nextIP.String()] = netw.network
-					return nextIP.String(), nil
-				} else {
-					return "", ErrIPADressIsNotIncludedInNetwork
-				}
-			}
-		}
-	} else {
+	pl := make([]string, len(netw.UsedIPStorage))
+	//sort.Sort(sort.Reverse(sort.StringSlice(pl)))
+	sort.Strings(pl)
+
+	if len(netw.FreeIPStorage) != 0 {
 		for key := range netw.FreeIPStorage {
 			delete(netw.FreeIPStorage, key)
 			netw.UsedIPStorage[key] = netw.network
+			fmt.Println(key)
 			return key, nil
 		}
+	}
+
+	for k := range netw.UsedIPStorage {
+		fmt.Println("strg", k)
+	}
+
+	for key := range netw.UsedIPStorage {
+		nextIP := nextIP(net.ParseIP(key), 1)
+		if _, ok := netw.UsedIPStorage[nextIP.String()]; !ok {
+			if netw.network.Contains(nextIP) {
+				netw.UsedIPStorage[nextIP.String()] = netw.network
+				return nextIP.String(), nil
+			} else {
+				return "", ErrIPADressIsNotIncludedInNetwork
+			}
+		}
+
 	}
 
 	return "", nil
