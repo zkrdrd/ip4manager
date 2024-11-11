@@ -3,7 +3,6 @@ package network
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
 )
@@ -21,136 +20,92 @@ var (
 	octets                            = []byte{0, 128, 192, 224, 240, 248, 242, 254, 255}
 )
 
-type Network struct {
-	network net.IPNet
-	IPdb    map[string]net.IPNet
+type NetworkControl struct {
+	network       net.IPNet
+	UsedIPStorage map[string]net.IPNet
+	FreeIPStorage map[string]net.IPNet
 }
 
-func NewNetwork(network string) (Network, error) {
+// Передается строка формата "192.168.0.0/16"
+// Создается 2 карты
+// 1. UsedIPStorage - для хранения используемых IP
+// 2. FreeIPStorage - для хранения освобожденных IP
+func NewNetwork(network string) (NetworkControl, error) {
 	_, ipv4Net, err := net.ParseCIDR(network)
-	return Network{
-		network: *ipv4Net,
-		IPdb:    make(map[string]net.IPNet),
+	return NetworkControl{
+		network:       *ipv4Net,
+		UsedIPStorage: make(map[string]net.IPNet),
+		FreeIPStorage: make(map[string]net.IPNet),
 	}, err
 }
 
-func SetUsedIP(ip string) {
-	ipnet := net.ParseIP("192.168.0.5")
-	fmt.Print(ipnet)
-}
-
-func (netw Network) SetUsedIP() (string, error) {
+// Метод аренды IP адрессов
+// Возвращает IP в строковом формате
+func (netw NetworkControl) SetUsedIP() (string, error) {
 
 	broadcast := make(net.IP, len(netw.network.IP.To4()))
 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
 
-	if len(netw.IPdb) == 0 {
+	if len(netw.UsedIPStorage) == 0 {
 		// network Example: 192.168.0.0
-		netw.IPdb[netw.network.IP.String()] = netw.network
+		netw.UsedIPStorage[netw.network.IP.String()] = netw.network
 		// gateway Example: 192.168.0.1
-		netw.IPdb[nextIP(netw.network.IP, 1).String()] = netw.network
+		netw.UsedIPStorage[nextIP(netw.network.IP, 1).String()] = netw.network
 		// broadcast Example: 192.168.255.255
-		netw.IPdb[broadcast.String()] = netw.network
+		netw.UsedIPStorage[broadcast.String()] = netw.network
 	}
 
-	for k, v := range netw.IPdb {
-		fmt.Print(k, v)
-	}
-
-	for key := range netw.IPdb {
-		nextIP := nextIP(netw.network.IP, 1)
-		storageIP := net.ParseIP(key)
-		if !reflect.DeepEqual(nextIP, storageIP) {
-			if netw.network.Contains(nextIP) {
-				netw.IPdb[nextIP.String()] = netw.network
-				return nextIP.String(), nil
-			} else {
-				return "", ErrIPADressIsNotIncludedInNetwork
+	if netw.FreeIPStorage == nil {
+		for key := range netw.UsedIPStorage {
+			nextIP := nextIP(netw.network.IP, 1)
+			storageIP := net.ParseIP(key)
+			if !reflect.DeepEqual(nextIP, storageIP) {
+				if netw.network.Contains(nextIP) {
+					netw.UsedIPStorage[nextIP.String()] = netw.network
+					return nextIP.String(), nil
+				} else {
+					return "", ErrIPADressIsNotIncludedInNetwork
+				}
 			}
 		}
+	} else {
+		for key := range netw.FreeIPStorage {
+			delete(netw.FreeIPStorage, key)
+			netw.UsedIPStorage[key] = netw.network
+			return key, nil
+		}
 	}
+
 	return "", nil
 }
 
-func (netw Network) ReleaseIP(ip string) error {
+// Метод осбождения IP адрессов из под аренды
+func (netw NetworkControl) ReleaseIP(ip string) error {
 
-	if len(netw.IPdb) == 0 {
+	if len(netw.UsedIPStorage) == 0 {
 		return ErrStorageIsEmpty
 	}
 
-	for key := range netw.IPdb {
+	for key := range netw.UsedIPStorage {
 		storageIP := net.ParseIP(key)
 
 		if !reflect.DeepEqual(ip, storageIP) {
-			delete(netw.IPdb, ip)
+			delete(netw.UsedIPStorage, ip)
+			netw.FreeIPStorage[ip] = netw.network
 			return nil
 		}
 	}
 	return ErrIPIsNotFound
 }
 
+// Функция расчета следущего IP адресса
 func nextIP(ip net.IP, inc uint) net.IP {
 	ip = ip.To4()
 	octets := uint(ip[0])<<24 + uint(ip[1])<<16 + uint(ip[2])<<8 + uint(ip[3])
 	octets += inc
-	octets4 := byte(octets & 0xFF)
-	octets3 := byte((octets >> 8) & 0xFF)
-	octets2 := byte((octets >> 16) & 0xFF)
-	octets1 := byte((octets >> 24) & 0xFF)
-	return net.IPv4(octets1, octets2, octets3, octets4)
+	octet4 := byte(octets & 0xFF)
+	octet3 := byte((octets >> 8) & 0xFF)
+	octet2 := byte((octets >> 16) & 0xFF)
+	octet1 := byte((octets >> 24) & 0xFF)
+	return net.IPv4(octet1, octet2, octet3, octet4)
 }
-
-// func NewNetwork(firestIPAddressOctet, secondIPAddressOctet, thierdIPAddressOctet, fourthIPAddressOctet byte,
-// 	firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet byte) (net.IPNet, error) {
-
-// 	if err := checkMask(firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet); err != nil {
-// 		return net.IPNet{
-// 			IP:   nil,
-// 			Mask: nil,
-// 		}, err
-// 	}
-
-// 	ip := net.IPv4(firestIPAddressOctet, secondIPAddressOctet, thierdIPAddressOctet, fourthIPAddressOctet)
-// 	mask := net.IPv4Mask(firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet)
-
-// 	if err := checkIPAddress(ip, mask); err != nil {
-// 		return net.IPNet{
-// 			IP:   nil,
-// 			Mask: nil,
-// 		}, err
-// 	}
-
-// 	return net.IPNet{
-// 		IP:   ip,
-// 		Mask: mask,
-// 	}, nil
-// }
-
-// func checkMask(firestMaskOctet, secondMaskOctet, thierdMaskOctet, fourthMaskOctet byte) error {
-// 	for _, val := range octets {
-// 		if firestMaskOctet == val && secondMaskOctet == 0 && thierdMaskOctet == 0 && fourthMaskOctet == 0 {
-// 			return nil
-// 		}
-// 		if firestMaskOctet == 255 && secondMaskOctet == val && thierdMaskOctet == 0 && fourthMaskOctet == 0 {
-// 			return nil
-// 		}
-// 		if firestMaskOctet == 255 && secondMaskOctet == 255 && thierdMaskOctet == val && fourthMaskOctet == 0 {
-// 			return nil
-// 		}
-// 		if firestMaskOctet == 255 && secondMaskOctet == 255 && thierdMaskOctet == 255 && fourthMaskOctet == val {
-// 			return nil
-// 		}
-// 	}
-// 	return ErrNetMaskIsNotCorrect
-// }
-
-// func checkIPAddress(ip net.IP, mask net.IPMask) error {
-// 	broadcast := make(net.IP, len(ip.To4()))
-// 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(ip.To4())|^binary.BigEndian.Uint32(net.IP(mask).To4()))
-
-// 	if bytes.Compare(ip.To4(), broadcast.To4()) == 0 {
-// 		return ErrNoFreeIPAddress
-// 	}
-
-// 	return nil
-// }
