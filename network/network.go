@@ -22,8 +22,8 @@ var (
 
 type NetworkControl struct {
 	network       net.IPNet
-	UsedIPStorage map[[4]byte]net.IPNet
-	FreeIPStorage map[[4]byte]net.IPNet
+	UsedIPStorage map[[4]byte]struct{}
+	FreeIPStorage map[[4]byte]struct{}
 }
 
 // Передается строка формата "192.168.0.0/16"
@@ -34,8 +34,8 @@ func NewNetwork(network string) (NetworkControl, error) {
 	_, ipv4Net, err := net.ParseCIDR(network)
 	return NetworkControl{
 		network:       *ipv4Net,
-		UsedIPStorage: make(map[[4]byte]net.IPNet),
-		FreeIPStorage: make(map[[4]byte]net.IPNet),
+		UsedIPStorage: make(map[[4]byte]struct{}),
+		FreeIPStorage: make(map[[4]byte]struct{}),
 	}, err
 }
 
@@ -45,7 +45,7 @@ func (netw NetworkControl) SetUsedIP() (string, error) {
 
 	if len(netw.UsedIPStorage) == 0 {
 		// gateway Example: 192.168.0.1
-		netw.UsedIPStorage[[4]byte(nextIP(netw.network.IP, 1).To4())] = netw.network
+		netw.UsedIPStorage[[4]byte(nextIP(netw.network.IP, 1).To4())] = struct{}{}
 	}
 
 	if len(netw.FreeIPStorage) != 0 {
@@ -67,7 +67,7 @@ func (netw NetworkControl) ReleaseIP(ip string) error {
 		ip := [4]byte(net.ParseIP(ip).To4())
 		if !reflect.DeepEqual(ip, storageIP) {
 			delete(netw.UsedIPStorage, ip)
-			netw.FreeIPStorage[ip] = netw.network
+			netw.FreeIPStorage[ip] = struct{}{}
 			return nil
 		}
 	}
@@ -99,7 +99,7 @@ func freeIPStorage(netw NetworkControl) string {
 	}
 
 	delete(netw.FreeIPStorage, minKey)
-	netw.UsedIPStorage[minKey] = netw.network
+	netw.UsedIPStorage[minKey] = struct{}{}
 	return net.IPv4(minKey[0], minKey[1], minKey[2], minKey[3]).String()
 }
 
@@ -118,7 +118,7 @@ func usedIPStorage(netw NetworkControl) (string, error) {
 
 	if _, ok := netw.UsedIPStorage[nextIP]; !ok {
 		if netw.network.Contains(maxIP) {
-			netw.UsedIPStorage[nextIP] = netw.network
+			netw.UsedIPStorage[nextIP] = struct{}{}
 			return maxIP.String(), nil
 		} else {
 			return "", ErrIPADressIsNotIncludedInNetwork
