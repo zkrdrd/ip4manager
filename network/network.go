@@ -43,16 +43,19 @@ func NewNetwork(network string) (NetworkControl, error) {
 // Возвращает IP в строковом формате
 func (netw NetworkControl) SetUsedIP() (string, error) {
 
+	broadcast := make(net.IP, len(netw.network.IP.To4()))
+	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
+
 	if len(netw.UsedIPStorage) == 0 {
 		// gateway Example: 192.168.0.1
 		netw.UsedIPStorage[[4]byte(nextIP(netw.network.IP, 1).To4())] = struct{}{}
 	}
 
 	if len(netw.FreeIPStorage) != 0 {
-		return freeIPStorage(netw), nil
+		return freeIPStorage(netw, broadcast), nil
 	}
 
-	return usedIPStorage(netw)
+	return usedIPStorage(netw, broadcast)
 
 }
 
@@ -87,10 +90,9 @@ func nextIP(ip net.IP, inc uint) net.IP {
 	return net.IPv4(octet1, octet2, octet3, octet4)
 }
 
-func freeIPStorage(netw NetworkControl) string {
-	maxIP := make(net.IP, len(netw.network.IP.To4()))
-	binary.BigEndian.PutUint32(maxIP, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
-	minKey := [4]byte(maxIP)
+func freeIPStorage(netw NetworkControl, broadcast net.IP) string {
+
+	minKey := [4]byte(broadcast)
 
 	for key := range netw.FreeIPStorage {
 		if key[2] <= minKey[2] && key[3] < minKey[3] {
@@ -103,7 +105,7 @@ func freeIPStorage(netw NetworkControl) string {
 	return net.IPv4(minKey[0], minKey[1], minKey[2], minKey[3]).String()
 }
 
-func usedIPStorage(netw NetworkControl) (string, error) {
+func usedIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
 
 	maxKey := [4]byte(netw.network.IP.To4())
 
@@ -115,6 +117,10 @@ func usedIPStorage(netw NetworkControl) (string, error) {
 
 	maxIP := net.IPv4(maxKey[0], maxKey[1], maxKey[2], maxKey[3])
 	nextIP := [4]byte(nextIP(maxIP, 1).To4())
+
+	if nextIP[2] == broadcast[2] && nextIP[3] == broadcast[3] {
+		return "", ErrNoFreeIPAddress
+	}
 
 	if _, ok := netw.UsedIPStorage[nextIP]; !ok {
 		if netw.network.Contains(maxIP) {
