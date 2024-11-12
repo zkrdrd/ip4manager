@@ -3,10 +3,8 @@ package network
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
-	"sort"
 )
 
 /*
@@ -24,8 +22,8 @@ var (
 
 type NetworkControl struct {
 	network       net.IPNet
-	UsedIPStorage map[string]net.IPNet
-	FreeIPStorage map[string]net.IPNet
+	UsedIPStorage map[[4]byte]net.IPNet
+	FreeIPStorage map[[4]byte]net.IPNet
 }
 
 // Передается строка формата "192.168.0.0/16"
@@ -36,8 +34,8 @@ func NewNetwork(network string) (NetworkControl, error) {
 	_, ipv4Net, err := net.ParseCIDR(network)
 	return NetworkControl{
 		network:       *ipv4Net,
-		UsedIPStorage: make(map[string]net.IPNet),
-		FreeIPStorage: make(map[string]net.IPNet),
+		UsedIPStorage: make(map[[4]byte]net.IPNet),
+		FreeIPStorage: make(map[[4]byte]net.IPNet),
 	}, err
 }
 
@@ -45,49 +43,17 @@ func NewNetwork(network string) (NetworkControl, error) {
 // Возвращает IP в строковом формате
 func (netw NetworkControl) SetUsedIP() (string, error) {
 
-	broadcast := make(net.IP, len(netw.network.IP.To4()))
-	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
-
 	if len(netw.UsedIPStorage) == 0 {
-		// broadcast Example: 192.168.255.255
-		netw.UsedIPStorage[broadcast.String()] = netw.network
-		// network Example: 192.168.0.0
-		netw.UsedIPStorage[netw.network.IP.String()] = netw.network
 		// gateway Example: 192.168.0.1
-		netw.UsedIPStorage[nextIP(netw.network.IP, 1).String()] = netw.network
+		netw.UsedIPStorage[[4]byte(nextIP(netw.network.IP, 1).To4())] = netw.network
 	}
-
-	pl := make([]string, len(netw.UsedIPStorage))
-	//sort.Sort(sort.Reverse(sort.StringSlice(pl)))
-	sort.Strings(pl)
 
 	if len(netw.FreeIPStorage) != 0 {
-		for key := range netw.FreeIPStorage {
-			delete(netw.FreeIPStorage, key)
-			netw.UsedIPStorage[key] = netw.network
-			fmt.Println(key)
-			return key, nil
-		}
+		return freeIPStorage(netw), nil
 	}
 
-	for k := range netw.UsedIPStorage {
-		fmt.Println("strg", k)
-	}
+	return usedIPStorage(netw)
 
-	for key := range netw.UsedIPStorage {
-		nextIP := nextIP(net.ParseIP(key), 1)
-		if _, ok := netw.UsedIPStorage[nextIP.String()]; !ok {
-			if netw.network.Contains(nextIP) {
-				netw.UsedIPStorage[nextIP.String()] = netw.network
-				return nextIP.String(), nil
-			} else {
-				return "", ErrIPADressIsNotIncludedInNetwork
-			}
-		}
-
-	}
-
-	return "", nil
 }
 
 // Метод осбождения IP адрессов из под аренды
@@ -97,15 +63,15 @@ func (netw NetworkControl) ReleaseIP(ip string) error {
 		return ErrStorageIsEmpty
 	}
 
-	for key := range netw.UsedIPStorage {
-		storageIP := net.ParseIP(key)
-
+	for storageIP := range netw.UsedIPStorage {
+		ip := [4]byte(net.ParseIP(ip).To4())
 		if !reflect.DeepEqual(ip, storageIP) {
 			delete(netw.UsedIPStorage, ip)
 			netw.FreeIPStorage[ip] = netw.network
 			return nil
 		}
 	}
+
 	return ErrIPIsNotFound
 }
 
@@ -119,4 +85,44 @@ func nextIP(ip net.IP, inc uint) net.IP {
 	octet2 := byte((octets >> 16) & 0xFF)
 	octet1 := byte((octets >> 24) & 0xFF)
 	return net.IPv4(octet1, octet2, octet3, octet4)
+}
+
+func freeIPStorage(netw NetworkControl) string {
+	maxIP := make(net.IP, len(netw.network.IP.To4()))
+	binary.BigEndian.PutUint32(maxIP, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
+	minKey := [4]byte(maxIP)
+
+	for key := range netw.FreeIPStorage {
+		if key[2] <= minKey[2] && key[3] < minKey[3] {
+			minKey = key
+		}
+	}
+
+	delete(netw.FreeIPStorage, minKey)
+	netw.UsedIPStorage[minKey] = netw.network
+	return net.IPv4(minKey[0], minKey[1], minKey[2], minKey[3]).String()
+}
+
+func usedIPStorage(netw NetworkControl) (string, error) {
+
+	maxKey := [4]byte(netw.network.IP.To4())
+
+	for key := range netw.UsedIPStorage {
+		if key[2] >= maxKey[2] && key[3] > maxKey[3] {
+			maxKey = key
+		}
+	}
+
+	maxIP := net.IPv4(maxKey[0], maxKey[1], maxKey[2], maxKey[3])
+	nextIP := [4]byte(nextIP(maxIP, 1).To4())
+
+	if _, ok := netw.UsedIPStorage[nextIP]; !ok {
+		if netw.network.Contains(maxIP) {
+			netw.UsedIPStorage[nextIP] = netw.network
+			return maxIP.String(), nil
+		} else {
+			return "", ErrIPADressIsNotIncludedInNetwork
+		}
+	}
+	return "", nil
 }
