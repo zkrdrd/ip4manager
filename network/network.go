@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"reflect"
+	"sync"
 )
 
 /*
@@ -22,6 +23,7 @@ var (
 
 type NetworkControl struct {
 	network       net.IPNet
+	mx            *sync.Mutex
 	UsedIPStorage map[[4]byte]struct{}
 	FreeIPStorage map[[4]byte]struct{}
 }
@@ -43,6 +45,9 @@ func NewNetwork(network string) (NetworkControl, error) {
 // Возвращает IP в строковом формате
 func (netw NetworkControl) SetUsedIP() (string, error) {
 
+	netw.mx.Lock()
+	defer netw.mx.Unlock()
+
 	broadcast := make(net.IP, len(netw.network.IP.To4()))
 	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
 
@@ -61,6 +66,9 @@ func (netw NetworkControl) SetUsedIP() (string, error) {
 
 // Метод осбождения IP адрессов из под аренды
 func (netw NetworkControl) ReleaseIP(ip string) error {
+
+	netw.mx.Lock()
+	defer netw.mx.Unlock()
 
 	if len(netw.UsedIPStorage) == 0 {
 		return ErrStorageIsEmpty
@@ -90,6 +98,7 @@ func nextIP(ip net.IP, inc uint) net.IP {
 	return net.IPv4(octet1, octet2, octet3, octet4)
 }
 
+// Используется storage освобожденных ip
 func freeIPStorage(netw NetworkControl, broadcast net.IP) string {
 
 	minKey := [4]byte(broadcast)
@@ -105,6 +114,7 @@ func freeIPStorage(netw NetworkControl, broadcast net.IP) string {
 	return net.IPv4(minKey[0], minKey[1], minKey[2], minKey[3]).String()
 }
 
+// используется storage занятых ip
 func usedIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
 
 	maxKey := [4]byte(netw.network.IP.To4())
