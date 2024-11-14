@@ -48,20 +48,6 @@ func TestAccounting(t *testing.T) {
 var (
 	networkString = "172.16.0.0/16"
 
-	TestNetworkString = []struct {
-		NetworkString string
-		Error         error
-	}{
-		{
-			NetworkString: "172.16.0.0/16",
-			Error:         nil,
-		},
-		{
-			NetworkString: "172.16.255.255/16",
-			Error:         nil,
-		},
-	}
-
 	GetIPParam = []struct {
 		GetIP string
 		Error error
