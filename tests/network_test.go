@@ -8,24 +8,122 @@ import (
 )
 
 func TestAccounting(t *testing.T) {
-	net, err := network.NewNetwork("172.16.0.0/16")
+	net, err := network.NewNetwork(networkString)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	ip1, _ := net.GetFreeIP()
-	ip2, _ := net.GetFreeIP()
-	ip3, err := net.GetFreeIP()
-	fmt.Println("1", ip1)
-	fmt.Println("2", ip2)
-	fmt.Println("3", ip3, err)
-	fmt.Println(net.SetUsedIP(ip1))
-	fmt.Println(net.SetUsedIP("192.168.0.6"))
-	net.ReleaseIP(ip3)
-	net.ReleaseIP(ip1)
-	ip4, _ := net.GetFreeIP()
-	ip5, _ := net.GetFreeIP()
-	fmt.Println(ip4, " ", ip5)
+	for _, expect := range GetIPParam {
+		ip, err := net.GetFreeIP()
+		if expect.GetIP != ip {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.GetIP, ip))
+		}
+		if expect.Error != err {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
+		}
+	}
+
+	for _, expect := range SetIPParam {
+		err := net.SetUsedIP(expect.SetIP)
+		if expect.Error != err {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
+		}
+	}
+
+	for _, expect := range ReleaseIPParam {
+		err := net.ReleaseIP(expect.ReleaseIP)
+		if expect.Error != err {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
+		}
+	}
+
+	for _, expect := range GetIPParamAfterRelease {
+		ip, err := net.GetFreeIP()
+		if expect.GetIP != ip {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.GetIP, ip))
+		}
+		if expect.Error != err {
+			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
+		}
+	}
+
 }
 
-var ()
+var (
+	networkString = "172.16.0.0/16"
+	GetIPParam    = []struct {
+		GetIP string
+		Error error
+	}{
+		{
+			GetIP: "172.16.0.2",
+			Error: nil,
+		},
+		{
+			GetIP: "172.16.0.3",
+			Error: nil,
+		},
+		{
+			GetIP: "172.16.0.4",
+			Error: nil,
+		},
+	}
+
+	SetIPParam = []struct {
+		SetIP string
+		Error error
+	}{
+		{
+			SetIP: "172.16.0.5",
+			Error: nil,
+		},
+		{
+			SetIP: "172.16.0.3",
+			Error: network.ErrIPAddressIsUsed,
+		},
+		{
+			SetIP: "192.168.0.6",
+			Error: network.ErrIPADressIsNotIncludedInNetwork,
+		},
+	}
+
+	ReleaseIPParam = []struct {
+		ReleaseIP string
+		Error     error
+	}{
+		{
+			ReleaseIP: "172.16.0.2",
+			Error:     nil,
+		},
+		{
+			ReleaseIP: "172.16.0.3",
+			Error:     nil,
+		},
+		{
+			ReleaseIP: "192.168.0.6",
+			Error:     network.ErrIPIsNotFound,
+		},
+	}
+
+	GetIPParamAfterRelease = []struct {
+		GetIP string
+		Error error
+	}{
+		{
+			GetIP: "172.16.0.2",
+			Error: nil,
+		},
+		{
+			GetIP: "172.16.0.3",
+			Error: nil,
+		},
+		{
+			GetIP: "172.16.0.6",
+			Error: nil,
+		},
+		{
+			GetIP: "172.16.0.7",
+			Error: nil,
+		},
+	}
+)
