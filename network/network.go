@@ -8,10 +8,6 @@ import (
 	"sync"
 )
 
-/*
-Конфигурирование модуля:  адрес сети и маска.
-Система сама определяем сколько в ней есть адресов и их диапазон с учетом адреса сети, первый адрес - адрес шлюза, и широковещательный адрес, последний адрес сети.
-*/
 var (
 	ErrIPADressIsNotIncludedInNetwork = errors.New("ip address is not included in network")
 	ErrStorageIsEmpty                 = errors.New("storage is empty")
@@ -30,9 +26,6 @@ type NetworkControl struct {
 }
 
 // Передается строка формата "192.168.0.0/16"
-// Создается 2 карты
-// 1. UsedIPStorage - для хранения используемых IP
-// 2. FreeIPStorage - для хранения освобожденных IP
 func NewNetwork(network string) (NetworkControl, error) {
 	_, ipv4Net, err := net.ParseCIDR(network)
 	return NetworkControl{
@@ -43,8 +36,7 @@ func NewNetwork(network string) (NetworkControl, error) {
 	}, err
 }
 
-// Метод аренды IP адрессов
-// Возвращает IP в строковом формате
+// Метод аренды IP адресса
 func (netw NetworkControl) GetFreeIP() (string, error) {
 
 	broadcast := make(net.IP, len(netw.network.IP.To4()))
@@ -65,6 +57,7 @@ func (netw NetworkControl) GetFreeIP() (string, error) {
 
 }
 
+// Метод указания занятых IP
 func (netw NetworkControl) SetUsedIP(ip string) error {
 
 	ipv4 := net.ParseIP(ip).To4()
