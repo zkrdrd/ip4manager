@@ -3,15 +3,11 @@ package network_test
 import (
 	"fmt"
 	"ipaddresspackage/network"
-	"log"
 	"testing"
 )
 
 func TestAccounting(t *testing.T) {
-	net, err := network.NewNetwork(networkString)
-	if err != nil {
-		log.Panic(err)
-	}
+	net, _ := network.NewNetwork(networkString)
 
 	for _, expect := range GetIPParam {
 		ip, err := net.GetFreeIP()
@@ -51,7 +47,22 @@ func TestAccounting(t *testing.T) {
 
 var (
 	networkString = "172.16.0.0/16"
-	GetIPParam    = []struct {
+
+	TestNetworkString = []struct {
+		NetworkString string
+		Error         error
+	}{
+		{
+			NetworkString: "172.16.0.0/16",
+			Error:         nil,
+		},
+		{
+			NetworkString: "172.16.255.255/16",
+			Error:         nil,
+		},
+	}
+
+	GetIPParam = []struct {
 		GetIP string
 		Error error
 	}{
