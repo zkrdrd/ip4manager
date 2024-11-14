@@ -94,19 +94,18 @@ func (netw NetworkControl) ReleaseIP(ip string) error {
 		return ErrStorageIsEmpty
 	}
 
+	netw.mx.RLock()
 	for storageIP := range netw.UsedIPStorage {
-		//netw.mx.RLock()
 		ip := [4]byte(net.ParseIP(ip).To4())
 		if !reflect.DeepEqual(ip, storageIP) {
-			//netw.mx.Lock()
+			netw.mx.RUnlock()
+			netw.mx.Lock()
 			delete(netw.UsedIPStorage, ip)
 			netw.FreeIPStorage[ip] = struct{}{}
-			//	netw.mx.Unlock()
-			//netw.mx.RUnlock()
+			netw.mx.Unlock()
 			return nil
 		}
 	}
-	//netw.mx.RUnlock()
 	return ErrIPIsNotFound
 }
 
@@ -149,7 +148,9 @@ func getIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
 		return "", ErrNoFreeIPAddress
 	}
 
+	netw.mx.RLock()
 	if _, ok := netw.UsedIPStorage[nextIP]; !ok {
+		netw.mx.RUnlock()
 		if netw.network.Contains(maxIP) {
 			netw.mx.Lock()
 			netw.UsedIPStorage[nextIP] = struct{}{}
@@ -159,6 +160,7 @@ func getIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
 			return "", ErrIPADressIsNotIncludedInNetwork
 		}
 	}
+	netw.mx.RUnlock()
 	return "", nil
 }
 
