@@ -2,7 +2,7 @@ package network_test
 
 import (
 	"fmt"
-	"ipaddresspackage/network"
+	network "ipaddresspackage"
 	"testing"
 )
 
