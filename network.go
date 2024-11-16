@@ -1,7 +1,6 @@
 package network
 
 import (
-	"encoding/binary"
 	"errors"
 	"net"
 	"reflect"
@@ -15,6 +14,7 @@ var (
 	ErrNoFreeIPAddress                = errors.New("no free ip address")
 	ErrNetMaskIsNotCorrect            = errors.New("net mask is not correct")
 	ErrIPAddressIsUsed                = errors.New("ip address is used")
+	ErrIPIsANetworkAddress            = errors.New("ip address is a network address")
 	octets                            = []byte{0, 128, 192, 224, 240, 248, 242, 254, 255}
 )
 
@@ -39,8 +39,14 @@ func NewNetwork(network string) (NetworkControl, error) {
 // Метод аренды IP адресса
 func (netw NetworkControl) GetFreeIP() (string, error) {
 
-	broadcast := make(net.IP, len(netw.network.IP.To4()))
-	binary.BigEndian.PutUint32(broadcast, binary.BigEndian.Uint32(netw.network.IP.To4())|^binary.BigEndian.Uint32(net.IP(netw.network.Mask).To4()))
+	ip4Byte := [4]byte(netw.network.IP.To4())
+	mask4Byte := [4]byte(net.IP(netw.network.Mask).To4())
+	var broadcast [4]byte
+
+	for i := range len(ip4Byte) {
+		broadcast[i] = ip4Byte[i] | ^mask4Byte[i]
+
+	}
 
 	if len(netw.UsedIPStorage) == 0 {
 		// gateway Example: 192.168.0.1
@@ -61,20 +67,32 @@ func (netw NetworkControl) GetFreeIP() (string, error) {
 func (netw NetworkControl) SetUsedIP(ip string) error {
 
 	ipv4 := net.ParseIP(ip).To4()
-	ipByte := [4]byte(ipv4)
+	ip4Byte := [4]byte(ipv4)
+	mask4Byte := [4]byte(net.IP(netw.network.Mask).To4())
+	var broadcast [4]byte
+
+	for i := range len(ip4Byte) {
+		broadcast[i] = ip4Byte[i] | ^mask4Byte[i]
+
+	}
+
+	if ipv4[2] == broadcast[2] && ipv4[3] == broadcast[3] || ipv4[2] == netw.network.IP[2] && ipv4[3] == netw.network.IP[3] {
+		return ErrIPIsANetworkAddress
+	}
 
 	if !netw.network.Contains(ipv4) {
 		return ErrIPADressIsNotIncludedInNetwork
 	}
+
 	netw.mx.RLock()
-	if _, ok := netw.UsedIPStorage[ipByte]; ok {
+	if _, ok := netw.UsedIPStorage[ip4Byte]; ok {
 		netw.mx.RUnlock()
 		return ErrIPAddressIsUsed
 	}
 	netw.mx.RUnlock()
 
 	netw.mx.Lock()
-	netw.UsedIPStorage[ipByte] = struct{}{}
+	netw.UsedIPStorage[ip4Byte] = struct{}{}
 	netw.mx.Unlock()
 
 	return nil
@@ -104,7 +122,7 @@ func (netw NetworkControl) ReleaseIP(ip string) error {
 }
 
 // Используется storage освобожденных ip
-func freeIPStorage(netw NetworkControl, broadcast net.IP) string {
+func freeIPStorage(netw NetworkControl, broadcast [4]byte) string {
 
 	minKey := [4]byte(broadcast)
 	netw.mx.RLock()
@@ -123,7 +141,7 @@ func freeIPStorage(netw NetworkControl, broadcast net.IP) string {
 }
 
 // используется storage занятых ip
-func getIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
+func getIPStorage(netw NetworkControl, broadcast [4]byte) (string, error) {
 
 	maxKey := [4]byte(netw.network.IP.To4())
 
@@ -152,6 +170,7 @@ func getIPStorage(netw NetworkControl, broadcast net.IP) (string, error) {
 			netw.mx.Unlock()
 			return netxIPv4.String(), nil
 		} else {
+			netw.mx.Unlock()
 			return "", ErrIPADressIsNotIncludedInNetwork
 		}
 	}

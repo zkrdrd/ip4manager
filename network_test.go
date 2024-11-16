@@ -9,7 +9,7 @@ import (
 func TestAccounting(t *testing.T) {
 	net, _ := network.NewNetwork(networkString)
 
-	for _, expect := range GetIPParam {
+	for _, expect := range GetIP {
 		ip, err := net.GetFreeIP()
 		if expect.GetIP != ip {
 			t.Error(fmt.Errorf(`result field %v != %v`, expect.GetIP, ip))
@@ -19,21 +19,21 @@ func TestAccounting(t *testing.T) {
 		}
 	}
 
-	for _, expect := range SetIPParam {
+	for _, expect := range SetUsedIP {
 		err := net.SetUsedIP(expect.SetIP)
 		if expect.Error != err {
 			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
 		}
 	}
 
-	for _, expect := range ReleaseIPParam {
+	for _, expect := range ReleaseIP {
 		err := net.ReleaseIP(expect.ReleaseIP)
 		if expect.Error != err {
 			t.Error(fmt.Errorf(`result field %v != %v`, expect.Error, err))
 		}
 	}
 
-	for _, expect := range GetIPParamAfterRelease {
+	for _, expect := range GetIPAfterRelease {
 		ip, err := net.GetFreeIP()
 		if expect.GetIP != ip {
 			t.Error(fmt.Errorf(`result field %v != %v`, expect.GetIP, ip))
@@ -48,7 +48,7 @@ func TestAccounting(t *testing.T) {
 var (
 	networkString = "172.16.0.0/16"
 
-	GetIPParam = []struct {
+	GetIP = []struct {
 		GetIP string
 		Error error
 	}{
@@ -66,13 +66,21 @@ var (
 		},
 	}
 
-	SetIPParam = []struct {
+	SetUsedIP = []struct {
 		SetIP string
 		Error error
 	}{
 		{
 			SetIP: "172.16.0.5",
 			Error: nil,
+		},
+		{
+			SetIP: "172.16.0.0",
+			Error: network.ErrIPIsANetworkAddress,
+		},
+		{
+			SetIP: "172.16.255.255",
+			Error: network.ErrIPIsANetworkAddress,
 		},
 		{
 			SetIP: "172.16.0.3",
@@ -84,7 +92,7 @@ var (
 		},
 	}
 
-	ReleaseIPParam = []struct {
+	ReleaseIP = []struct {
 		ReleaseIP string
 		Error     error
 	}{
@@ -102,7 +110,7 @@ var (
 		},
 	}
 
-	GetIPParamAfterRelease = []struct {
+	GetIPAfterRelease = []struct {
 		GetIP string
 		Error error
 	}{
