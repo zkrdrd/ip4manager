@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNetwork(t *testing.T) {
+func TestIP4Manager(t *testing.T) {
 	net, _ := ip4manager.NewNetwork(networkString)
 
 	for _, expect := range GetIP {
