@@ -15,7 +15,6 @@ var (
 	ErrNetMaskIsNotCorrect            = errors.New("net mask is not correct")
 	ErrIPAddressIsUsed                = errors.New("ip address is used")
 	ErrIPIsANetworkAddress            = errors.New("ip address is a network address")
-	octets                            = []byte{0, 128, 192, 224, 240, 248, 242, 254, 255}
 )
 
 type NetworkControl struct {
