@@ -1,13 +1,13 @@
-package network_test
+package ip4manager_test
 
 import (
 	"fmt"
-	network "ipaddresspackage"
+	"ip4manager"
 	"testing"
 )
 
 func TestNetwork(t *testing.T) {
-	net, _ := network.NewNetwork(networkString)
+	net, _ := ip4manager.NewNetwork(networkString)
 
 	for _, expect := range GetIP {
 		ip, err := net.GetFreeIP()
@@ -76,19 +76,19 @@ var (
 		},
 		{
 			SetIP: "172.16.0.0",
-			Error: network.ErrIPIsANetworkAddress,
+			Error: ip4manager.ErrIPIsANetworkAddress,
 		},
 		{
 			SetIP: "172.16.255.255",
-			Error: network.ErrIPIsANetworkAddress,
+			Error: ip4manager.ErrIPIsANetworkAddress,
 		},
 		{
 			SetIP: "172.16.0.3",
-			Error: network.ErrIPAddressIsUsed,
+			Error: ip4manager.ErrIPAddressIsUsed,
 		},
 		{
 			SetIP: "192.168.0.6",
-			Error: network.ErrIPADressIsNotIncludedInNetwork,
+			Error: ip4manager.ErrIPADressIsNotIncludedInNetwork,
 		},
 	}
 
@@ -106,7 +106,7 @@ var (
 		},
 		{
 			ReleaseIP: "192.168.0.6",
-			Error:     network.ErrIPIsNotFound,
+			Error:     ip4manager.ErrIPIsNotFound,
 		},
 	}
 
