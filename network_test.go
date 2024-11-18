@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestAccounting(t *testing.T) {
+func TestNetwork(t *testing.T) {
 	net, _ := network.NewNetwork(networkString)
 
 	for _, expect := range GetIP {
